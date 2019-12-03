@@ -1,0 +1,24 @@
+!  during the intermeidate computaion, it is often to switch between v , u , f .
+!  the nominal values used for air at 300 k are cp = 1.00 kj/kg.k, cv = 0.718 kj/kg.k,, and gamma = 1.4.
+!  the si unit based on [kg, m, s , kelvin] is used, note the unit of [joule=kg*(m/s)^2] [pascal=kg/m/s^2]
+    parameter(cp    = 1000)
+    parameter(gamma = 1.4)
+    parameter(cv= cp/gamma)
+    parameter(r = cp - cv)
+    parameter(tau_c  = 0.0000003/(3*340))
+    parameter(t_a = 3000 * 6)
+    parameter(dh_f0 = -700 * cp)
+!   for roe solver
+    parameter(eps=100) !to enable entropy fix, set a large value for eps, say 100
+
+!   grid, cfl condition, domain length and time/dt
+    parameter(n =nint(1000 * 0.2)) ! total number of grid cells
+    parameter(cfl  = 0.05)
+
+    !the spatial-grid
+    parameter(domainlength = 2) ! total domain length [m]
+    parameter(dx = domainlength/n) !cell size
+
+    parameter(t_end = 1/1000 * 1.6) ! domainlength/c_characteriticsoundspeed/3 *20 ;
+    parameter(dt = cfl * dx / c_char)
+    parameter(nt = t_end/dt) ! total number of timesteps
