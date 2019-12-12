@@ -1,6 +1,4 @@
 
-clear all;
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % This code demonstrates a simple implementaion of 6 numerical schemes
 %  to solve the unstead 1D Euler equations.
@@ -72,8 +70,8 @@ Cp    = 1000 ; % Do not Change
 gamma = 1.4;   % Do not Change
 Cv= Cp/gamma;
 R = Cp - Cv;
-tau_c  = 0.0000003/(3*340);
-T_A = 3000 * 6;
+tau_c  = 0.0000009/(3*340);
+T_A = 2000 * 6;
 dH_f0 = -700 * Cp;
 %%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -83,13 +81,13 @@ dH_f0 = -700 * Cp;
 BC.type = 'ShockTube';   %BC.type = 'NozzleFlow';
 
 if strcmp( BC.type, 'ShockTube')
-    n_points =1000 * 0.2; % Total Number of grid cells
+    n_points =1000 * 20; % Total Number of grid cells
 
     %%%%%%%%%%%%%%%%%%
     % here you can set initial condition for shocktube problem
     % _L for left side, _R for right side)
-     BC.rho_L = 1.225*10;            % kg/m^3
-     BC.P_L   = 100000*20;        % pascal
+     BC.rho_L = 1.225*10/2;            % kg/m^3
+     BC.P_L   = 100000*10;        % pascal
      BC.u_L   = 0;
      BC.Y_L   = 0;
 
@@ -126,10 +124,10 @@ DomainLength=  2; % total domain length [m]: better not to change
 x = linspace(-DomainLength/2,DomainLength/2,n_points);  x=x';
 dx = DomainLength/(n_points);  % cell size
 %
-
+data.x = x;
 % Change the total time of the simulation here if you want longer time of simulations
 if strcmp( BC.type, 'ShockTube')
-  TotalSimulationTime = 1/1000 * 1.6; %DomainLength/c_CharacteriticSoundSpeed/3 *20 ;
+  TotalSimulationTime = 1/1000 * 0.9; %DomainLength/c_CharacteriticSoundSpeed/3 *20 ;
 end
 
 dt = CFL *dx/c_CharacteriticSoundSpeed;  % time-step size
@@ -143,55 +141,59 @@ data.n_points = n_points;
 data = SetInitialConditions(data, BC);
 
 % plot prepartion
-figure(1);
-set(gcf,'PaperUnits','inches','PaperPosition',[0 0 6*6 4*4]);
-set(gcf,'Units','inches','Position',[1 1 6*6 4*4]);
-set(0, 'DefaultLineLineWidth', 0.5);
+%figure(1);
+%set(gcf,'PaperUnits','inches','PaperPosition',[0 0 6*6 4*4]);
+%set(gcf,'Units','inches','Position',[1 1 6*6 4*4]);
+%set(0, 'DefaultLineLineWidth', 0.5);
 
 %  main loop of time-advancement
 data.CurrentTime = 0;
 data2 = data;
 TimeStep = 0;
 tic
-pause_plot(x,data,data2,'Roe and van Leer');
+%pause_plot(x,data,data2,'Roe and van Leer');
 
-while data. CurrentTime < TotalSimulationTime
+while data.CurrentTime < TotalSimulationTime
     TimeStep = TimeStep + 1;
-    %data2 = Lax(data2,dt,dx,n_points,BC);
+    data = Lax(data,dt,dx,n_points,BC);
     %data  = StegerWarming(data,dt,dx,n_points,BC);
     %data  = VanLeer(data,dt,dx,n_points,BC);
     %data = AUSM(data,dt,dx,n_points,BC);
-    data = Roe(data,dt,dx,n_points,BC);
+    %data = Roe(data,dt,dx,n_points,BC);
 
 
     %  Plot every 10 time step togher with analytical shock-tube solutions
-    if mod(TimeStep , 10 ) == 0
-        pause_plot(x,data,data,'Roe and van Leer');
-        %time = data.CurrentTime * 1000
-        toc
-    end
-    if  mod(TimeStep , 10 ) == 0
+    %if mod(TimeStep , 10 ) == 0
+    %    %pause_plot(x,data,data,'Roe and van Leer');
+    %    %time = data.CurrentTime * 1000
+    %    toc
+    %end
+    if  mod(TimeStep , 20 ) == 0
         %here is to adpatively adjust time step only for nozzle flow !
+        
         maxSpeed = max( abs(data.u .*( 1./abs(data.M) + 1))  );
-        % adjust time step size
-        dt = CFL *dx/maxSpeed;
+        maxSpeed
+        data.M(data.M == 0)
+        dt = CFL *dx/maxSpeed
+        Progress = data.CurrentTime/TotalSimulationTime
     end
 end % end loop of time-advancement
+toc
 %AllResults{end+1} = { str_NameOfNumericalScheme, data};
-
-if  size(AllResults,2 ) > 1
-    close all;
-    plot_summary(x,AllResults);
-end
-
+%pause_plot(x,data,data,'Roe and van Leer');
+%if  size(AllResults,2 ) > 1
+%    close all;
+%    plot_summary(x,AllResults);
+%end
+save('lax.mat','data')
 return;
 
 % change here if you want other boundary conditions
 function [data]= Set_BoundaryCondition(data, BC,dt,dx)
     if     strcmp( BC.type, 'ShockTube'  )
-        %data = BoundaryCondition_ZeroGradient(data,BC);
+        data = BoundaryCondition_ZeroGradient(data,BC);
         %data = BoundaryCondition_Wall_zeroPressureGradient(data,BC,dt,dx);
-        data = BoundaryCondition_WallReflection(data,BC,dt,dx);
+        %data = BoundaryCondition_WallReflection(data,BC,dt,dx);
         %data = BoundaryCondition_OpenEnd(data,BC,dt,dx);
     end
 end
@@ -535,7 +537,6 @@ function [W] = get_W(j,data)
     W(3)= 0;
     W(4)=  data.rho(j) / tau_c * (1 - data.Y(j))*exp(-T_A/data.T(j));
     %W(4)=  0.5 * (data.rho(j+1) + data.rho(j-1)) / tau_c * (1 - 0.5 * (data.Y(j-1)  + data.Y(j+1)))*exp(-T_A/(0.5 * (data.T(j+1) + data.T(j-1))));
-
 end
 
 function [F_minus] = get_F_minus(j,data)

@@ -1,24 +1,42 @@
 !  during the intermeidate computaion, it is often to switch between v , u , f .
 !  the nominal values used for air at 300 k are cp = 1.00 kj/kg.k, cv = 0.718 kj/kg.k,, and gamma = 1.4.
 !  the si unit based on [kg, m, s , kelvin] is used, note the unit of [joule=kg*(m/s)^2] [pascal=kg/m/s^2]
-    parameter(cp    = 1000)
-    parameter(gamma = 1.4)
-    parameter(cv= cp/gamma)
-    parameter(r = cp - cv)
-    parameter(tau_c  = 0.0000003/(3*340))
-    parameter(t_a = 3000 * 6)
-    parameter(dh_f0 = -700 * cp)
-!   for roe solver
-    parameter(eps=100) !to enable entropy fix, set a large value for eps, say 100
+    real, parameter :: cp    = 1000.0
+    real, parameter :: gamma = 1.4
+    real, parameter :: cv= cp/gamma
+    real, parameter :: r = cp - cv
+    real, parameter :: tau_c  = 0.0000009/(3.0*340.0)
+    real, parameter :: t_a = 2000 * 6.0
+    real, parameter :: dh_f0 = -700 * cp
 
+!   inital and boundary conditions, _l for left side, _r for right side)
+
+    real, parameter :: bc_rho_l = 1.225*10/2
+    real, parameter :: bc_p_l   = real(100000 * 10)
+    real, parameter :: bc_u_l   = 0.0
+    real, parameter :: bc_y_l   = 0.0
+    real, parameter :: bc_rho_r = 1.225/2
+    real, parameter :: bc_p_r   = real(100000 * 1)
+    real, parameter :: bc_u_r   = 0.0
+    real, parameter :: bc_y_r   = 0.0
+    real, parameter :: bc_t_l = bc_p_l/(bc_rho_l*r)
+    real, parameter :: bc_a_l = sqrt( gamma * r * bc_t_l)
+    real, parameter :: bc_t_r = bc_p_r/(bc_rho_r*r)
+    real, parameter :: bc_a_r = sqrt( gamma * r * bc_t_r)
+    real, parameter :: char_c = max(bc_a_l, bc_a_r )
+
+    character(len = 40), parameter :: out = 'output.dat'
 !   grid, cfl condition, domain length and time/dt
-    parameter(n =nint(1000 * 0.2)) ! total number of grid cells
-    parameter(cfl  = 0.05)
+    real, parameter :: cfl  = 0.5
+    logical, parameter :: verbose = .TRUE.
+    integer, parameter :: n = 3000000 ! total number of grid cells
+    integer, parameter :: update = 100
+    integer, parameter :: n_threads = 4
+    integer, parameter :: iplatform = 4
+
+    real, parameter :: min_dt = 1e-10
 
     !the spatial-grid
-    parameter(domainlength = 2) ! total domain length [m]
-    parameter(dx = domainlength/n) !cell size
-
-    parameter(t_end = 1/1000 * 1.6) ! domainlength/c_characteriticsoundspeed/3 *20 ;
-    parameter(dt = cfl * dx / c_char)
-    parameter(nt = t_end/dt) ! total number of timesteps
+    real, parameter :: domainlength = 2 ! total domain length [m]
+    real, parameter :: dx = domainlength/n !cell size
+    real, parameter :: t_end = 1./1000. * 0.001!0.9!0.56685581 ! domainlength/c_characteriticsoundspeed/3 *20 ;
