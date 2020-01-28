@@ -148,7 +148,7 @@ contains
         !
         ! Check number of devices for first platform.
         !
-        err = clGetDeviceIDs(platform_ids(iplatform), CL_DEVICE_TYPE_GPU, 0, C_NULL_PTR, &
+        err = clGetDeviceIDs(platform_ids(iplatform), CL_DEVICE_TYPE_ALL, 0, C_NULL_PTR, &
                 num_devices)
         if (err /= CL_SUCCESS) then
             print *, 'Error quering devices: ', err

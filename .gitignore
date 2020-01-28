@@ -1,2 +1,6 @@
-clfortran/*
-IntelSamples/*
+*.mod
+*.o
+*.mat
+*.dat
+reactivetube
+pics/

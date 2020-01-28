@@ -15,6 +15,12 @@
 %              rixin.yu@energy.lth.se
 %              2018-08-30
 %
+%   Further developed by Martin Karp to compare and solve for 1D reactive flow with
+%   one variable of state, the massfraction of fuel Y.
+%   tpi15mka@student.lu.se
+%   2019-12-10
+%
+%   There might be some bugs, but it should be runnable pretty easily.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   This code is for numerically solving the unsteady 1D Euler equation:
 %          d_t(U) + d_x(F) = 0;
@@ -81,7 +87,7 @@ dH_f0 = -700 * Cp;
 BC.type = 'ShockTube';   %BC.type = 'NozzleFlow';
 
 if strcmp( BC.type, 'ShockTube')
-    n_points =1000 * 20; % Total Number of grid cells
+    n_points =1000 * 0.2; % Total Number of grid cells
 
     %%%%%%%%%%%%%%%%%%
     % here you can set initial condition for shocktube problem
@@ -117,7 +123,7 @@ if strcmp( BC.type, 'ShockTube')
 end
 
 
-CFL  = 0.05;
+CFL  = 0.5;
 
 % The spatial-grid
 DomainLength=  2; % total domain length [m]: better not to change
@@ -139,15 +145,15 @@ AllResults = {};
 data.n_points = n_points;
 
 data = SetInitialConditions(data, BC);
-
 % plot prepartion
-%figure(1);
-%set(gcf,'PaperUnits','inches','PaperPosition',[0 0 6*6 4*4]);
-%set(gcf,'Units','inches','Position',[1 1 6*6 4*4]);
-%set(0, 'DefaultLineLineWidth', 0.5);
+figure(1);
+set(gcf,'PaperUnits','inches','PaperPosition',[0 0 6*6 4*4]);
+set(gcf,'Units','inches','Position',[1 1 6*6 4*4]);
+set(0, 'DefaultLineLineWidth', 0.5);
 
 %  main loop of time-advancement
 data.CurrentTime = 0;
+data.W = zeros(data.n_points,4);
 data2 = data;
 TimeStep = 0;
 tic
@@ -155,7 +161,9 @@ tic
 
 while data.CurrentTime < TotalSimulationTime
     TimeStep = TimeStep + 1;
-    data = Lax(data,dt,dx,n_points,BC);
+    data.CurrentTime = data.CurrentTime  + dt;
+    data = lax2(data, dt, dx)
+    %data  = Lax(data,dt,dx,n_points,BC);
     %data  = StegerWarming(data,dt,dx,n_points,BC);
     %data  = VanLeer(data,dt,dx,n_points,BC);
     %data = AUSM(data,dt,dx,n_points,BC);
@@ -168,35 +176,116 @@ while data.CurrentTime < TotalSimulationTime
     %    %time = data.CurrentTime * 1000
     %    toc
     %end
+
+for j = 2:n_points-1
+    data = U_to_V(data.state(j,:),j,data);
+end
+    data=Set_BoundaryCondition(data,BC,dt,dx);
+    data=Update_PTEsM_AfterReset_V(data);
+    pause_plot(data,data,'Lax n = 200');
     if  mod(TimeStep , 20 ) == 0
         %here is to adpatively adjust time step only for nozzle flow !
-        
+        data.M = 1 ./ (data.u ./ sqrt( gamma * R * data.T))
         maxSpeed = max( abs(data.u .*( 1./abs(data.M) + 1))  );
         maxSpeed
-        data.M(data.M == 0)
         dt = CFL *dx/maxSpeed
         Progress = data.CurrentTime/TotalSimulationTime
+        TimeStep
+        toc
     end
 end % end loop of time-advancement
-toc
+en = toc;
+costy = cost(n_points, TimeStep, 20)
+costy/en
+for j = 2:n_points-1
+    data = U_to_V(data.state(j,:),j,data);
+end
+
+data=Set_BoundaryCondition(data,BC,dt,dx);
+data=Update_PTEsM_AfterReset_V(data);
+data.CurrentTime = data.CurrentTime + dt;
+
 %AllResults{end+1} = { str_NameOfNumericalScheme, data};
-%pause_plot(x,data,data,'Roe and van Leer');
+pause_plot(data,data,'Roe and van Leer');
 %if  size(AllResults,2 ) > 1
 %    close all;
 %    plot_summary(x,AllResults);
 %end
-save('lax.mat','data')
+%save('lax200.mat','data')
 return;
+
+function data= U_to_V22(U,data)
+ global Cp Cv gamma R dH_f0;
+  data.rho = U(1,:) ;
+  data.u   = U(2,:)./U(1,:) ;
+  Y        = U(4,:)./U(1,:);
+
+  Y(Y > 1) = 1;
+  Y(Y < 0) = 0;
+
+  data.Y = Y;
+  data.H   = gamma.*U(3,:)./U(1,:) -(gamma-1).*0.5.* (data.u).^2 - (gamma - 1) .* Y .* dH_f0;
+end
+
+function [data] = Update_PTEsM_AfterReset_V2(data)
+    global Cp Cv gamma R dH_f0;
+    rho = data.rho;  % V = [rho, u, H]
+    u   = data.u;
+    Y   = data.Y;
+    H_c = Y * dH_f0;
+    H   = data.H - H_c;          % total enthalpy
+    T   = (H-0.5.*u.*u )./Cp ;
+    E   = Cv .* T + 0.5 .* u .* u + H_c;       % total energy
+    P   = rho.*R.*T;
+
+    data.P = P;  % get P, T, E to ease later computation of U and E
+    data.T = T;
+    data.E = E;
+    data.s = Cv*log( P./(rho).^gamma );
+    data.M = u./sqrt( gamma .* R .* T);
+end
 
 % change here if you want other boundary conditions
 function [data]= Set_BoundaryCondition(data, BC,dt,dx)
-    if     strcmp( BC.type, 'ShockTube'  )
+    if     strcmp( BC.type, 'ShockTube')
         data = BoundaryCondition_ZeroGradient(data,BC);
         %data = BoundaryCondition_Wall_zeroPressureGradient(data,BC,dt,dx);
         %data = BoundaryCondition_WallReflection(data,BC,dt,dx);
         %data = BoundaryCondition_OpenEnd(data,BC,dt,dx);
     end
 end
+
+function cost = cost(n, iter, update)
+    div = 4 * n;
+    mult = 23 * n;
+    add = 22 * n;
+    expo = 1 * n;
+    updateflop = 8 * n / update;
+    cost = iter * (div + mult + add + expo + updateflop);
+end
+
+function [data] = lax2(data, dt, dx)
+    global Cp Cv gamma R dH_f0 tau_c T_A
+    data.name = 'Lax';
+
+    data.u = data.state(:,2)./data.state(:,1);
+    data.E = data.state(:,3)./data.state(:,1);
+    data.T = (data.E - data.state(:,4).*dH_f0 - 0.5.*data.u.^2)/Cv;
+    data.f(:,1) = data.state(:,2);
+    data.f(:,2) = data.state(:,2) .* data.u + data.T .* data.state(:,1) .* R;
+    data.f(:,3) = data.state(:,2) .* (data.E + R*data.T);
+    data.f(:,4) = data.state(:,2) .* data.state(:,4);
+
+    data.W(2:data.n_points-1,4) = data.state(2:data.n_points-1,1) ./ tau_c .* (1.0 - 0.5.* (data.state(1:data.n_points-2,4) + data.state(3:data.n_points,4))).*exp(-2 .* T_A./(data.T(1:data.n_points-2) + data.T(3:data.n_points)));
+    data.state(2:data.n_points-1,:) = 0.5.*( data.state(3:data.n_points,:) + data.state(1:data.n_points-2,:) ) - 0.5.*dt./dx .* ( data.f(3:data.n_points,:) - data.f(1:data.n_points-2,:) ) + 0.5 .* dt .* data.W(2:data.n_points-1,:);
+
+    data.state(data.state(:,4) > 1,4) = 1;
+    data.state(data.state(:,4) < 0,4) = 0;
+
+    data.state(1,:) = data.state(2,:);
+    data.state(data.n_points,:) = data.state(data.n_points-1,:);
+end
+
 
 function [data] = Lax(data,dt,dx,n_points,BC)
     data.name = 'Lax';
@@ -293,7 +382,7 @@ function [data] = Update_Roe_Flux(data)
     global Cp Cv gamma R dH_f0;
     eps=100 ; %to enable entropy fix, set a large value for eps, say 100
     for j = 1 : data.n_points-1
-        % Left state is j  , Right State is j+1
+        % Left data.state is j  , Right data.state is j+1
         sq_rhoL = sqrt( data.rho(j) );  sq_rhoR = sqrt( data.rho(j+1) );
         RoeAve_rho = sq_rhoL*sq_rhoR ;
         RoeAve_H   = ((data.H(j) - data.Y(j) * dH_f0)*sq_rhoL + (data.H(j+1) - data.Y(j+1) * dH_f0)*sq_rhoR) / (sq_rhoL + sq_rhoR) ;
@@ -375,7 +464,7 @@ function [data] = Update_AUSM_Flux(data)
 
     % here to compute flux at cell-interface of j+1/2
     for j = 1 : data.n_points-1
-        % Left state is j  , Right State is j+1
+        % Left data.state is j  , Right data.state is j+1
         M_jhalf = M_plus(j) +  M_minus(j+1) ;
 
         %Francesco
@@ -499,6 +588,7 @@ function [data]= SetInitialConditions(data, BC)
     global Cp Cv gamma R;
     if    strcmp( BC.type, 'ShockTube'  )
         %
+        data.state = zeros(data.n_points,4)
         T_L = BC.P_L/(R* BC.rho_L);  H_L = Cp*T_L+0.5 * BC.u_L^2 * BC.Y_L;
         T_R = BC.P_R/(R* BC.rho_R);  H_R = Cp*T_R+0.5 * BC.u_R^2 * BC.Y_R;
         n_points= data.n_points;
@@ -509,6 +599,19 @@ function [data]= SetInitialConditions(data, BC)
                 data.rho(j)=BC.rho_R; data.u(j)=BC.u_R; data.H(j)=H_R; data.Y(j) = BC.Y_R;
             end
         end
+
+        e_l  = H_L - R * BC.T_L
+
+        e_r  = H_R - R * BC.T_R
+        mid = round(data.n_points/2);
+        data.state(1:mid,1) = BC.rho_L;
+        data.state(1:mid,2) = BC.rho_L * BC.u_L;
+        data.state(1:mid,3) = BC.rho_L * e_l;
+        data.state(1:mid,4) = BC.rho_L * BC.Y_L;
+        data.state(mid:end,1) = BC.rho_R;
+        data.state(mid:end,2) = BC.rho_R * BC.u_R;
+        data.state(mid:end,3) = BC.rho_R * e_r;
+        data.state(mid:end,4) = BC.rho_R * BC.Y_R;
         data = Update_PTEsM_AfterReset_V(data);
         %
     end
@@ -535,8 +638,8 @@ function [W] = get_W(j,data)
     W(1)= 0;
     W(2)= 0;
     W(3)= 0;
-    W(4)=  data.rho(j) / tau_c * (1 - data.Y(j))*exp(-T_A/data.T(j));
-    %W(4)=  0.5 * (data.rho(j+1) + data.rho(j-1)) / tau_c * (1 - 0.5 * (data.Y(j-1)  + data.Y(j+1)))*exp(-T_A/(0.5 * (data.T(j+1) + data.T(j-1))));
+    %W(4)=  data.rho(j) / tau_c * (1 - data.Y(j))*exp(-T_A/data.T(j));
+    W(4)=  0.5 * (data.rho(j+1) + data.rho(j-1)) / tau_c * (1 - 0.5 * (data.Y(j-1)  + data.Y(j+1)))*exp(-T_A/(0.5 * (data.T(j+1) + data.T(j-1))));
 end
 
 function [F_minus] = get_F_minus(j,data)

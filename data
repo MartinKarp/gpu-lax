@@ -29,14 +29,14 @@
 !   grid, cfl condition, domain length and time/dt
     real, parameter :: cfl  = 0.5
     logical, parameter :: verbose = .TRUE.
-    integer, parameter :: n = 3000000 ! total number of grid cells
-    integer, parameter :: update = 100
+    integer, parameter :: n = 20000 ! total number of grid cells
+    integer, parameter :: update = 20
     integer, parameter :: n_threads = 4
-    integer, parameter :: iplatform = 4
+    integer, parameter :: iplatform = 1
 
-    real, parameter :: min_dt = 1e-10
+    real, parameter :: min_u = 1e-10
 
     !the spatial-grid
     real, parameter :: domainlength = 2 ! total domain length [m]
     real, parameter :: dx = domainlength/n !cell size
-    real, parameter :: t_end = 1./1000. * 0.001!0.9!0.56685581 ! domainlength/c_characteriticsoundspeed/3 *20 ;
+    real, parameter :: t_end = 1./1000. * 100.9!0.9!0.56685581 ! domainlength/c_characteriticsoundspeed/3 *20 ;
